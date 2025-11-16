@@ -3,6 +3,8 @@
 #include "platformMIS32mk.h"
 #include "filter.h"
 #include "memory.h"
+#include "appStateLibrary.h"
+#include "messengerMIS.h"
 //--- Globální instance filtr? a pam?ti ----------------------------------------
 
 // Filtry tla?ítek
