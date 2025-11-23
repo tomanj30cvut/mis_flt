@@ -5,6 +5,8 @@
 #include "memory.h"
 #include "appStateLibrary.h"
 #include "messengerMIS.h"
+#include "encoder_decoder.h"
+#include "value_converter.h"
 //--- Globální instance filtr? a pam?ti ----------------------------------------
 
 // Filtry tla?ítek
@@ -30,6 +32,9 @@ static memoryTypeBool_t memoryS5;
 static memoryTypeBool_t memoryS6;
 static memoryTypeBool_t memoryS7;
 static memoryTypeBool_t memoryS8;
+
+static encoder_decoder_t encoderDecoder;
+static value_converter_t valueConverter;
 
 //--- Konfigura?ní funkce -----------------------------------------------------
 
@@ -73,6 +78,9 @@ void configApplication(void) {
     // Inicializuj filtry enkodéru
     initFilterTypeBool(&filterS9A, false);
     initFilterTypeBool(&filterS9B, false);
+    
+    initEncoderDecoder(&encoderDecoder, 128);
+    initValueConverter(&valueConverter);
     
     // Inicializuj RTM komunikaci
     initMessengerRTM();
@@ -214,6 +222,27 @@ void runApplication(void) {
     if (filterS9B.outputValid) {
         setCoderLedB(filterS9B.outputValue);
     }
+    // Dekóduj enkodér
+    unsigned char encoderCount = runEncoderDecoder(&encoderDecoder,
+                                                    filterS9A.outputValue,
+                                                    filterS9B.outputValue);
+    
+    // Vyber zdroj podle V2 a zpracuj
+    bool selectEncoder = appState->button_s2.outputMemory;
+    unsigned char outputValue = processValues(&valueConverter,
+                                             potValue,
+                                             encoderCount,
+                                             selectEncoder);
+    
+    // Ulo? finální výstup
+    appState->adc_0.outputInBaseRange = outputValue;
+    
+    // ?ídí MIN/MAX LED (V9, V12)
+    setCoderLedLL(isMinimumReached(&valueConverter));
+    setCoderLedHL(isMaximumReached(&valueConverter));
+    
+    // Displej (LED V13-V24)
+    setFpgaVxValue((unsigned short)outputValue);
     
     runMessengerRTM();
 }
