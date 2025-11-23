@@ -12,7 +12,7 @@
 #define RTM_RX_INTEGER_MSG_LENGTH 7 ///< Délka příjaté INT zprávy
 #define RTM_TX_INTEGER_MSG_LENGTH 7 ///< Délka odeslané INT zprávy
 #define RTM_TIMING_MAX 50           ///< Čas RTM komunikace (50 ms)
-#define TABLE_TERMINAL_MSG_LEN 40   ///< Délka zprávy pro table terminál
+#define TABLE_TERMINAL_MSG_LEN 80   ///< Délka zprávy pro table terminál
 
 enum {
     TX_STOP,        ///< Zastavit přenos
@@ -101,15 +101,17 @@ void runMessengerRTM(void) {
                     break;
                     
                 case 1:
-                    // CMD(1): Odešli hodnotu potenciometru do grafického okna
+                    // CMD(1): Ode?li v�stupn� hodnotu + V9 + V12 do grafick�ho okna
+
                     {
-                        signed short potValue = getPotentiometerValue();
-                        
-                        if (potValue > 2047) potValue = 2047;
-                        if (potValue < -2047) potValue = -2047;
+                        signed short outputValue = (signed short)appState->adc_0.outputInBaseRange;  // Fin�ln� v�stup (0-255)
+                        signed short ledV9 = appState->adc_0.isMin ? 1 : 0;                         // LED V9 (minimum)
+                        signed short ledV12 = appState->adc_0.isMax ? 1 : 0;                        // LED V12 (maximum)
                         
                         txMsgNum[0] = RTM_TX_INTEGER_MSG_LENGTH;
-                        integerToBytes(potValue, &txMsgNum[1]);
+                        integerToBytes(outputValue, &txMsgNum[1]);
+                        integerToBytes(ledV9, &txMsgNum[3]);
+                        integerToBytes(ledV12, &txMsgNum[5]);
                         sendMessageUSB(txMsgNum, COM_GO);
                     }
                     break;
@@ -130,17 +132,14 @@ void runMessengerRTM(void) {
                 case 3:
                     // CMD(3): Odešli data do table terminálu
                     {
-                        signed short potValue = getPotentiometerValue();
-                        
-                        if (potValue > 2047) potValue = 2047;
-                        if (potValue < -2047) potValue = -2047;
-                        
                         char messageBuffer[TABLE_TERMINAL_MSG_LEN];
                         
-                        sprintf(messageBuffer, "Vpot=%5d S1=%d S2=%d",
-                                potValue,
-                                appState->button_s1.outputMemory,
-                                appState->button_s2.outputMemory);
+                        sprintf(messageBuffer, "Out=%3d V1=%d V2=%d V9=%d V12=%d",
+                                appState->adc_0.outputInBaseRange,        // Fin�ln� v�stup
+                                appState->button_s1.outputMemory,          // LED V1
+                                appState->button_s2.outputMemory,          // LED V2 (p?ep�na?)
+                                appState->adc_0.isMin,                     // LED V9 (minimum)
+                                appState->adc_0.isMax);                    // LED V12 (maximum)
                         
                         sendTableTerminalMessageUSB("1A", messageBuffer);
                     }
