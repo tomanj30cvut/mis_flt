@@ -1,5 +1,6 @@
 #include <xc.h>
 #include <stdbool.h>
+#include <sys/attribs.h>
 #include "platformMIS32mk.h"
 #include "filter.h"
 #include "memory.h"
