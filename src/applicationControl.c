@@ -8,7 +8,6 @@
 #include "encoder_decoder.h"
 #include "value_converter.h"
 #include "pwm_module.h"
-#include "rtm_pwm_extension.c"
 
 //--- Globální instance filtr? a pam?ti ----------------------------------------
 
