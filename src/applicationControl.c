@@ -7,6 +7,9 @@
 #include "messengerMIS.h"
 #include "encoder_decoder.h"
 #include "value_converter.h"
+#include "pwm_module.h"
+#include "rtm_pwm_extension.c"
+
 //--- Globální instance filtr? a pam?ti ----------------------------------------
 
 // Filtry tla?ítek
@@ -35,6 +38,30 @@ static memoryTypeBool_t memoryS8;
 
 static encoder_decoder_t encoderDecoder;
 static value_converter_t valueConverter;
+
+//--- PWM globální prom?nné ---------------------------------------------------
+// Konstanty pro PWM modulaci
+#define PWM_PERIOD_MS           20      // Perioda 20 ms
+#define PWM_MIN_PULSE_MS        1       // Minimální puls 1 ms
+#define PWM_MAX_PULSE_MS        2       // Maximální puls 2 ms
+#define TIMER2_PRESCALER        8       // Prescaler Timer 2
+#define CPU_FREQUENCY           120000000  // 120 MHz
+
+// Vypo?ítané hodnoty pro Timer 2 a Output Compare
+#define TIMER2_FREQUENCY        (CPU_FREQUENCY / TIMER2_PRESCALER)  // 15 MHz
+#define PWM_PERIOD_TICKS        (TIMER2_FREQUENCY / 50)  // 50 Hz = 20 ms
+#define PWM_MIN_PULSE_TICKS     (TIMER2_FREQUENCY * PWM_MIN_PULSE_MS / 1000)  // 15000 tick?
+#define PWM_MAX_PULSE_TICKS     (TIMER2_FREQUENCY * PWM_MAX_PULSE_MS / 1000)  // 30000 tick?
+#define PWM_RANGE_TICKS         (PWM_MAX_PULSE_TICKS - PWM_MIN_PULSE_TICKS)
+
+static unsigned short pwmInput = 0;      // Vstupní hodnota PWM [0-255]
+static unsigned short pwmDutyCycleTicks = PWM_MIN_PULSE_TICKS;  // Vypo?ítaný duty cycle
+
+//--- RTM komunika?ní prom?nné ------------------------------------------------
+static unsigned char rtmCommandMode = 0;  // Aktuální RTM p?íkaz (0-4)
+static unsigned short rtmTimingCounter = 0;  // ?íta? pro RTM timing (50ms)
+#define RTM_TIMING_MAX  50  // Odeslání zprávy ka?dých 50 ms
+
 
 //--- Konfigura?ní funkce -----------------------------------------------------
 
@@ -84,7 +111,55 @@ void configApplication(void) {
     
     // Inicializuj RTM komunikaci
     initMessengerRTM();
+        
+    // Inicializuj PWM modul
+    configPWM();
 }
+
+//--- Inicializace PWM modulu (Timer 2 a Output Compare 16) -------------------
+void configPWM(void) {
+    // Zakáz preruseni Timer 2 b?hem konfigurace
+    IEC0bits.T2IE = 0;
+    
+    // Nakonfiguruj Timer 2
+    T2CONbits.ON = 0;           // Vypni Timer 2
+    T2CONbits.TCKPS = 0b011;    // Prescaler = 8
+    PR2 = PWM_PERIOD_TICKS;     // Nastavit periodu
+    TMR2 = 0;                   // Vynuluj ?íta?
+    
+    // Nakonfiguruj Output Compare 16 (PWM mód)
+    OC16CONbits.ON = 0;         // Vypni Output Compare 16
+    OC16CONbits.OCTSEL = 0;     // Vyber Timer 2 jako zdroj
+    OC16CONbits.OCM = 0b110;    // PWM mód: Continuous Pulse Mode
+    
+    // Nastav po?áte?ní duty cycle (1 ms = minimální puls)
+    OC16R = PWM_MIN_PULSE_TICKS;    // Duty cycle registr
+    OC16RS = PWM_MIN_PULSE_TICKS;   // Secondary duty cycle registr
+    
+    // Nastav p?eru?ení Timer 2
+    IPC2bits.T2IP = 1;          // Priorita = 1
+    IPC2bits.T2IS = 3;          // Subprioritas = 3
+    IFS0bits.T2IF = 0;          // Vynuluj p?íznak p?eru?ení
+    IEC0bits.T2IE = 1;          // Povol p?eru?ení Timer 2
+    
+    // Spus? Timer 2 a Output Compare 16
+    T2CONbits.ON = 1;
+    OC16CONbits.ON = 1;
+}
+
+//--- Funkce pro výpo?et duty cycle z vstupní hodnoty [0-255] ----------------
+static unsigned short calculateDutyCycle(unsigned char value) {
+    // Ome? vstup na rozsah [0-255]
+    if (value > 255) value = 255;
+    
+    // P?epo?et: 0 ? MIN_PULSE, 255 ? MAX_PULSE
+    // Lineární interpolace: output = MIN + (value/255) * RANGE
+    unsigned long dutyCycleLong = PWM_MIN_PULSE_TICKS;
+    dutyCycleLong += ((unsigned long)value * PWM_RANGE_TICKS) / 255;
+    
+    return (unsigned short)dutyCycleLong;
+}
+
 
 //--- Funkce b?hu aplikace ---------------------------------------------------
 
