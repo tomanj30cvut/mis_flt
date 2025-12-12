@@ -50,8 +50,6 @@ static value_converter_t valueConverter;
 // Vypo?ítané hodnoty pro Timer 2 a Output Compare
 #define TIMER2_FREQUENCY        (CPU_FREQUENCY / TIMER2_PRESCALER)  // 15 MHz
 #define PWM_PERIOD_TICKS        (TIMER2_FREQUENCY / 50)  // 50 Hz = 20 ms
-#define PWM_MIN_PULSE_TICKS     (TIMER2_FREQUENCY * PWM_MIN_PULSE_MS / 1000)  // 15000 tick?
-#define PWM_MAX_PULSE_TICKS     (TIMER2_FREQUENCY * PWM_MAX_PULSE_MS / 1000)  // 30000 tick?
 #define PWM_RANGE_TICKS         (PWM_MAX_PULSE_TICKS - PWM_MIN_PULSE_TICKS)
 
 static unsigned short pwmInput = 0;      // Vstupní hodnota PWM [0-255]
@@ -148,7 +146,7 @@ void configPWM(void) {
 }
 
 //--- Funkce pro výpo?et duty cycle z vstupní hodnoty [0-255] ----------------
-static unsigned short calculateDutyCycle(unsigned char value) {
+unsigned short calculateDutyCycle(unsigned char value) {
     // Ome? vstup na rozsah [0-255]
     if (value > 255) value = 255;
     
